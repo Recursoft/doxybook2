@@ -224,7 +224,9 @@ void Doxybook2::Generator::printIndex(const FolderCategory type,
     renderer.render(typeToIndexTemplate(config, type), path, data);
 }
 
-nlohmann::json Doxybook2::Generator::buildIndexRecursively(const Node& node, const Filter& filter, const Filter& skip) {
+nlohmann::json Doxybook2::Generator::buildIndexRecursively(const Node& node,
+    const Filter& filter,
+    const Filter& skip) {
     auto json = nlohmann::json::array();
     std::vector<const Node*> sorted;
     sorted.reserve(node.getChildren().size());
@@ -241,7 +243,18 @@ nlohmann::json Doxybook2::Generator::buildIndexRecursively(const Node& node, con
     for (const auto& child : sorted) {
         auto data = jsonConverter.convert(*child);
 
-        auto test = buildIndexRecursively(*child, filter, skip);
+        Filter filterToUse = filter;
+        const bool bIsFilteringModules = filterToUse.find(Kind::MODULE) != filterToUse.end();
+
+        // Nest classes in modules. Don't nest namespaces, doxygen doesn't properly add multiple groups to a top level namespace used
+        // in multiple modules, and assigns no groups to child namespaces. What ends up happening is the same namespace and all children
+        // show up for every module the top level namespace is referenced.
+        if (bIsFilteringModules) {
+            filterToUse.insert(Kind::CLASS);
+            filterToUse.insert(Kind::STRUCT);
+        }
+
+        auto test = buildIndexRecursively(*child, filterToUse, skip);
         if (!test.empty()) {
             data["children"] = std::move(test);
         }
